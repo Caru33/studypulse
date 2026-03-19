@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StudyPulse — Transforme ton temps mort en étude intelligente</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0f1f3d;
+    --navy-mid: #1a3260;
+    --accent: #4fffb0;
+    --accent-dim: #2dd68a;
+    --off-white: #f0ede6;
+    --muted: #8a9bbf;
+    --card-bg: rgba(255,255,255,0.04);
+    --border: rgba(255,255,255,0.08);
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background-color: var(--navy);
+    color: var(--off-white);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 17px;
+    line-height: 1.65;
+    overflow-x: hidden;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.5;
+  }
+  .blob { position: fixed; border-radius: 50%; filter: blur(120px); pointer-events: none; z-index: 0; }
+  .blob-1 { width: 600px; height: 600px; background: rgba(79,255,176,0.06); top: -200px; right: -200px; }
+  .blob-2 { width: 500px; height: 500px; background: rgba(26,50,96,0.6); bottom: 10%; left: -150px; }
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 20px 60px;
+    background: linear-gradient(to bottom, rgba(15,31,61,0.95), transparent);
+    backdrop-filter: blur(12px);
+  }
+  .logo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.4rem; letter-spacing: -0.02em; color: var(--off-white); text-decoration: none; }
+  .logo span { color: var(--accent); }
+  nav .cta-nav {
+    background: var(--accent); color: var(--navy);
+    font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.85rem; letter-spacing: 0.04em;
+    padding: 10px 22px; border-radius: 100px; text-decoration: none; transition: transform 0.2s, box-shadow 0.2s;
+  }
+  nav .cta-nav:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(79,255,176,0.3); }
+  .hero {
+    position: relative; z-index: 1; min-height: 100vh;
+    display: flex; flex-direction: column; justify-content: center; align-items: flex-start;
+    padding: 120px 60px 80px; max-width: 1200px; margin: 0 auto;
+  }
+  .hero-tag {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(79,255,176,0.1); border: 1px solid rgba(79,255,176,0.25);
+    color: var(--accent); font-size: 0.78rem; font-weight: 500; letter-spacing: 0.08em;
+    text-transform: uppercase; padding: 7px 16px; border-radius: 100px; margin-bottom: 32px;
+    opacity: 0; animation: fadeUp 0.6s 0.2s forwards;
+  }
+  .hero-tag::before { content: '●'; font-size: 0.5rem; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  h1 {
+    font-family: 'Syne', sans-serif; font-weight: 800;
+    font-size: clamp(2.8rem, 6vw, 5.2rem); line-height: 1.08; letter-spacing: -0.03em;
+    max-width: 800px; opacity: 0; animation: fadeUp 0.7s 0.35s forwards;
+  }
+  h1 em { font-style: normal; color: var(--accent); }
+  .hero-sub { font-size: 1.15rem; color: var(--muted); max-width: 520px; margin-top: 24px; font-weight: 300; opacity: 0; animation: fadeUp 0.7s 0.5s forwards; }
+  .hero-cta-group { display: flex; gap: 16px; margin-top: 44px; align-items: center; flex-wrap: wrap; opacity: 0; animation: fadeUp 0.7s 0.65s forwards; }
+  .btn-primary {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: var(--accent); color: var(--navy);
+    font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1rem;
+    padding: 16px 32px; border-radius: 100px; text-decoration: none; transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .btn-primary:hover { transform: translateY(-3px); box-shadow: 0 12px 32px rgba(79,255,176,0.35); }
+  .btn-primary svg { width: 18px; height: 18px; }
+  .btn-secondary { display: inline-flex; align-items: center; gap: 8px; color: var(--off-white); font-size: 0.95rem; text-decoration: none; opacity: 0.7; transition: opacity 0.2s; }
+  .btn-secondary:hover { opacity: 1; }
+  .hero-stat-row { display: flex; gap: 48px; margin-top: 72px; opacity: 0; animation: fadeUp 0.7s 0.8s forwards; }
+  .stat-num { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 2rem; color: var(--accent); line-height: 1; }
+  .stat-label { font-size: 0.82rem; color: var(--muted); margin-top: 4px; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+  section { position: relative; z-index: 1; }
+  .section-inner { max-width: 1200px; margin: 0 auto; padding: 100px 60px; }
+  .section-label { font-size: 0.75rem; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin-bottom: 16px; }
+  h2 { font-family: 'Syne', sans-serif; font-weight: 800; font-size: clamp(2rem, 4vw, 3rem); line-height: 1.12; letter-spacing: -0.02em; max-width: 600px; }
+  .problem { background: rgba(255,255,255,0.015); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .problem-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; margin-top: 56px; }
+  .problem-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 20px; padding: 36px 32px; transition: border-color 0.3s, transform 0.3s; }
+  .problem-card:hover { border-color: rgba(79,255,176,0.3); transform: translateY(-4px); }
+  .problem-icon { width: 48px; height: 48px; background: rgba(79,255,176,0.1); border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; margin-bottom: 20px; }
+  .problem-card h3 { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1.1rem; margin-bottom: 10px; }
+  .problem-card p { font-size: 0.9rem; color: var(--muted); line-height: 1.6; }
+  .problem-source { margin-top: 40px; font-size: 0.82rem; color: var(--muted); text-align: center; border-top: 1px solid var(--border); padding-top: 24px; }
+  .problem-source strong { color: var(--off-white); }
+  .benefits-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 60px; margin-top: 64px; align-items: start; }
+  .benefit-list { display: flex; flex-direction: column; gap: 20px; }
+  .benefit-item { display: flex; gap: 20px; align-items: flex-start; padding: 28px; border-radius: 16px; border: 1px solid var(--border); background: var(--card-bg); transition: border-color 0.3s; cursor: default; }
+  .benefit-item:hover { border-color: rgba(79,255,176,0.3); }
+  .benefit-num { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.6rem; color: var(--accent); opacity: 0.35; line-height: 1; min-width: 36px; }
+  .benefit-text h4 { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1rem; margin-bottom: 6px; }
+  .benefit-text p { font-size: 0.88rem; color: var(--muted); }
+  .phone-mockup { background: linear-gradient(145deg, #1a2f5a, #0f1f3d); border: 1px solid var(--border); border-radius: 36px; padding: 32px 24px; min-height: 480px; display: flex; flex-direction: column; gap: 16px; position: sticky; top: 100px; box-shadow: 0 40px 80px rgba(0,0,0,0.4); }
+  .phone-top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .phone-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1.1rem; }
+  .phone-badge { background: rgba(79,255,176,0.15); color: var(--accent); font-size: 0.72rem; padding: 4px 10px; border-radius: 100px; font-weight: 500; }
+  .phone-card { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 16px; padding: 18px 20px; }
+  .phone-card-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+  .phone-card-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.95rem; margin-bottom: 4px; }
+  .phone-card-sub { font-size: 0.82rem; color: var(--muted); }
+  .phone-quiz { background: rgba(79,255,176,0.07); border: 1px solid rgba(79,255,176,0.2); border-radius: 16px; padding: 18px 20px; }
+  .phone-quiz-q { font-size: 0.88rem; margin-bottom: 12px; }
+  .quiz-options { display: flex; flex-direction: column; gap: 8px; }
+  .quiz-opt { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; font-size: 0.82rem; cursor: pointer; transition: all 0.2s; }
+  .quiz-opt:hover, .quiz-opt.active { background: rgba(79,255,176,0.15); border-color: rgba(79,255,176,0.4); color: var(--accent); }
+  .phone-progress { background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; padding: 16px 20px; }
+  .progress-label { font-size: 0.78rem; color: var(--muted); margin-bottom: 10px; }
+  .progress-bar-track { background: rgba(255,255,255,0.06); border-radius: 100px; height: 6px; overflow: hidden; }
+  .progress-bar-fill { background: linear-gradient(90deg, var(--accent-dim), var(--accent)); height: 100%; border-radius: 100px; width: 68%; transition: width 1s ease; }
+  .progress-nums { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--muted); margin-top: 6px; }
+  .pricing { background: rgba(255,255,255,0.015); border-top: 1px solid var(--border); }
+  .pricing-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 56px; max-width: 800px; }
+  .pricing-card { border-radius: 24px; padding: 40px 36px; border: 1px solid var(--border); background: var(--card-bg); position: relative; overflow: hidden; }
+  .pricing-card.featured { background: linear-gradient(135deg, rgba(79,255,176,0.1), rgba(79,255,176,0.03)); border-color: rgba(79,255,176,0.35); }
+  .pricing-card.featured::before { content: 'RECOMMANDÉ'; position: absolute; top: 20px; right: 20px; background: var(--accent); color: var(--navy); font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.62rem; letter-spacing: 0.08em; padding: 4px 10px; border-radius: 100px; }
+  .price-tier { font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 16px; }
+  .price-val { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 3rem; line-height: 1; margin-bottom: 6px; }
+  .price-val sup { font-size: 1.2rem; vertical-align: top; margin-top: 8px; }
+  .price-val span { font-size: 1rem; font-weight: 400; color: var(--muted); }
+  .price-desc { font-size: 0.85rem; color: var(--muted); margin-bottom: 28px; }
+  .price-features { list-style: none; display: flex; flex-direction: column; gap: 12px; margin-bottom: 32px; }
+  .price-features li { font-size: 0.9rem; display: flex; gap: 10px; align-items: flex-start; }
+  .price-features li::before { content: '✓'; color: var(--accent); font-weight: 700; flex-shrink: 0; }
+  .price-features li.muted::before { content: '–'; color: var(--muted); }
+  .price-features li.muted { color: var(--muted); }
+  .btn-outline { display: block; text-align: center; border: 1px solid var(--border); color: var(--off-white); padding: 14px; border-radius: 100px; font-family: 'Syne', sans-serif; font-weight: 600; font-size: 0.9rem; text-decoration: none; transition: all 0.2s; }
+  .btn-outline:hover { border-color: rgba(255,255,255,0.3); }
+  .btn-filled { display: block; text-align: center; background: var(--accent); color: var(--navy); padding: 14px; border-radius: 100px; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.9rem; text-decoration: none; transition: all 0.2s; }
+  .btn-filled:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(79,255,176,0.3); }
+  .testimonials-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 56px; }
+  .testimonial-card { border: 1px solid var(--border); border-radius: 20px; padding: 32px; background: var(--card-bg); position: relative; }
+  .quote-mark { font-family: 'Syne', sans-serif; font-size: 4rem; line-height: 1; color: var(--accent); opacity: 0.2; position: absolute; top: 16px; left: 28px; }
+  .testimonial-text { font-size: 0.95rem; line-height: 1.7; font-style: italic; color: rgba(240,237,230,0.85); margin-top: 20px; }
+  .testimonial-author { margin-top: 20px; display: flex; align-items: center; gap: 12px; }
+  .author-avatar { width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg, var(--accent-dim), var(--navy-mid)); display: flex; align-items: center; justify-content: center; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.85rem; color: var(--navy); flex-shrink: 0; }
+  .author-name { font-weight: 600; font-size: 0.88rem; }
+  .author-role { font-size: 0.8rem; color: var(--muted); }
+  .cta-section { text-align: center; border-top: 1px solid var(--border); }
+  .cta-inner { max-width: 700px; margin: 0 auto; padding: 120px 60px; }
+  .cta-inner h2 { max-width: 100%; text-align: center; }
+  .cta-inner p { color: var(--muted); margin-top: 20px; font-size: 1rem; }
+  .cta-buttons { display: flex; gap: 20px; justify-content: center; margin-top: 44px; flex-wrap: wrap; align-items: center; }
+  .store-btn { display: inline-flex; align-items: center; gap: 12px; background: var(--off-white); color: var(--navy); padding: 14px 28px; border-radius: 16px; text-decoration: none; transition: all 0.2s; font-weight: 500; }
+  .store-btn:hover { transform: translateY(-3px); box-shadow: 0 12px 32px rgba(240,237,230,0.2); }
+  .store-btn .store-icon { font-size: 1.6rem; line-height: 1; }
+  .store-btn-texts { text-align: left; }
+  .store-btn-sub { font-size: 0.7rem; opacity: 0.6; display: block; }
+  .store-btn-name { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.95rem; display: block; }
+  footer { position: relative; z-index: 1; border-top: 1px solid var(--border); padding: 40px 60px; display: flex; justify-content: space-between; align-items: center; max-width: 1200px; margin: 0 auto; }
+  .footer-copy { font-size: 0.82rem; color: var(--muted); }
+  .reveal { opacity: 0; transform: translateY(30px); transition: opacity 0.7s ease, transform 0.7s ease; }
+  .reveal.visible { opacity: 1; transform: translateY(0); }
+  @media (max-width: 900px) {
+    nav { padding: 18px 24px; } .hero { padding: 100px 24px 60px; } .section-inner { padding: 70px 24px; }
+    .problem-grid { grid-template-columns: 1fr; } .benefits-grid { grid-template-columns: 1fr; }
+    .phone-mockup { position: static; } .pricing-grid { grid-template-columns: 1fr; max-width: 100%; }
+    .testimonials-grid { grid-template-columns: 1fr; } .hero-stat-row { gap: 28px; }
+    .cta-inner { padding: 80px 24px; } footer { flex-direction: column; gap: 16px; text-align: center; padding: 30px 24px; }
+  }
+</style>
+</head>
+<body>
+<div class="blob blob-1"></div>
+<div class="blob blob-2"></div>
+<nav>
+  <a href="#" class="logo">Study<span>Pulse</span></a>
+  <a href="#telecharger" class="cta-nav">Télécharger l'app</a>
+</nav>
+<div class="hero">
+  <div class="hero-tag">IA • Éducation • Québec</div>
+  <h1>Transforme ton <em>temps mort</em> en étude intelligente</h1>
+  <p class="hero-sub">L'assistant IA qui connaît ton contexte académique — plus besoin de tout ré-expliquer à chaque session.</p>
+  <div class="hero-cta-group">
+    <a href="#telecharger" class="btn-primary">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Télécharger gratuitement
+    </a>
+    <a href="#solution" class="btn-secondary">Voir comment ça fonctionne →</a>
+  </div>
+  <div class="hero-stat-row">
+    <div class="stat"><div class="stat-num">10+</div><div class="stat-label">entrevues étudiantes validées</div></div>
+    <div class="stat"><div class="stat-num">1h30</div><div class="stat-label">de transport récupérées / jour</div></div>
+    <div class="stat"><div class="stat-num">5$/mois</div><div class="stat-label">version complète</div></div>
+  </div>
+</div>
+<section class="problem">
+  <div class="section-inner">
+    <p class="section-label reveal">Le problème</p>
+    <h2 class="reveal">Les étudiants perdent du temps — pas par manque d'effort</h2>
+    <div class="problem-grid">
+      <div class="problem-card reveal"><div class="problem-icon">⏱️</div><h3>Approche linéaire inefficace</h3><p>Les étudiants relisent tout leur matériel sans prioriser, perdant du temps sur ce qu'ils maîtrisent déjà.</p></div>
+      <div class="problem-card reveal"><div class="problem-icon">🤖</div><h3>IA sans contexte académique</h3><p>ChatGPT ne connaît pas ton plan de cours ni tes règles académiques — chaque session nécessite un long prompting.</p></div>
+      <div class="problem-card reveal"><div class="problem-icon">🚇</div><h3>Mobilité non exploitée</h3><p>1h à 1h30 de transport en commun par jour, sans outil conçu pour étudier efficacement sur mobile.</p></div>
+    </div>
+    <p class="problem-source reveal">Basé sur <strong>10+ entrevues</strong> avec des étudiants du cégep et de l'université au Québec (Université de Montréal, pharmacie, psychologie)</p>
+  </div>
+</section>
+<section id="solution">
+  <div class="section-inner">
+    <p class="section-label reveal">La solution</p>
+    <h2 class="reveal">L'app qui connaît vraiment ton cours</h2>
+    <div class="benefits-grid">
+      <div class="benefit-list">
+        <div class="benefit-item reveal"><div class="benefit-num">01</div><div class="benefit-text"><h4>Téléverse ton matériel une fois</h4><p>PDF, PowerPoints, plans de cours — StudyPulse assimile ton contexte académique. Fini le prompting répété.</p></div></div>
+        <div class="benefit-item reveal"><div class="benefit-num">02</div><div class="benefit-text"><h4>Quiz adaptatifs qui ciblent tes lacunes</h4><p>L'IA identifie ce que tu maîtrises moins et concentre tes révisions là où c'est vraiment utile.</p></div></div>
+        <div class="benefit-item reveal"><div class="benefit-num">03</div><div class="benefit-text"><h4>Conçu pour le mobile et le transport</h4><p>Flashcards et révisions optimisées pour ton téléphone — transforme chaque trajet en session productive.</p></div></div>
+        <div class="benefit-item reveal"><div class="benefit-num">04</div><div class="benefit-text"><h4>Plan d'étude synchronisé à tes examens</h4><p>Intégration calendrier pour planifier automatiquement selon tes échéances réelles.</p></div></div>
+      </div>
+      <div class="phone-mockup reveal">
+        <div class="phone-top-bar"><div class="phone-title">StudyPulse</div><div class="phone-badge">● En direct</div></div>
+        <div class="phone-card"><div class="phone-card-label">Prochain examen</div><div class="phone-card-title">Pharmacologie — Chapitre 4-7</div><div class="phone-card-sub">Dans 3 jours · 2h d'étude recommandées</div></div>
+        <div class="phone-quiz">
+          <div class="phone-card-label">Quiz ciblé · Lacune détectée</div>
+          <div class="phone-quiz-q">Quel mécanisme explique la résistance aux bêta-lactamines ?</div>
+          <div class="quiz-options">
+            <div class="quiz-opt">Efflux actif de la molécule</div>
+            <div class="quiz-opt active">Production de bêta-lactamases ✓</div>
+            <div class="quiz-opt">Modification du site cible</div>
+          </div>
+        </div>
+        <div class="phone-progress">
+          <div class="progress-label">Progression · Chapitre 5</div>
+          <div class="progress-bar-track"><div class="progress-bar-fill"></div></div>
+          <div class="progress-nums"><span>68% maîtrisé</span><span>12 lacunes restantes</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="pricing">
+  <div class="section-inner">
+    <p class="section-label reveal">Tarification</p>
+    <h2 class="reveal">Accessible à tous les étudiants</h2>
+    <div class="pricing-grid">
+      <div class="pricing-card reveal">
+        <div class="price-tier">Gratuit</div>
+        <div class="price-val">0<span> $</span></div>
+        <div class="price-desc">Pour commencer à étudier intelligemment</div>
+        <ul class="price-features">
+          <li>Upload de matériel de cours (PDFs, slides)</li>
+          <li>Quiz basiques générés par l'IA</li>
+          <li>Flashcards pour mobile</li>
+          <li class="muted">Détection des lacunes avancée</li>
+          <li class="muted">Intégration calendrier complète</li>
+          <li class="muted">Historique de progression</li>
+        </ul>
+        <a href="#telecharger" class="btn-outline">Télécharger gratuitement</a>
+      </div>
+      <div class="pricing-card featured reveal">
+        <div class="price-tier">StudyPulse Pro</div>
+        <div class="price-val"><sup>$</sup>5<span> /mois</span></div>
+        <div class="price-desc">L'expérience complète, moins cher qu'un café</div>
+        <ul class="price-features">
+          <li>Tout du plan gratuit</li>
+          <li>Détection automatique des lacunes</li>
+          <li>Intégration calendrier complète</li>
+          <li>Historique et suivi de progression</li>
+          <li>Notifications quotidiennes intelligentes</li>
+          <li>Intégration Notebook LM &amp; Quizlet</li>
+        </ul>
+        <a href="#telecharger" class="btn-filled">Essayer Pro gratuitement</a>
+      </div>
+    </div>
+  </div>
+</section>
+<section>
+  <div class="section-inner">
+    <p class="section-label reveal">Ce que disent les étudiants</p>
+    <h2 class="reveal">Validé par 10+ entrevues au Québec</h2>
+    <div class="testimonials-grid">
+      <div class="testimonial-card reveal"><div class="quote-mark">"</div><p class="testimonial-text">Je perds tellement de temps à décider quoi étudier avant même de commencer. Si une app pouvait juste me dire par où partir selon mes lacunes, ça changerait tout.</p><div class="testimonial-author"><div class="author-avatar">ML</div><div><div class="author-name">Marie-Lou</div><div class="author-role">Étudiante en pharmacie · Université de Montréal</div></div></div></div>
+      <div class="testimonial-card reveal"><div class="quote-mark">"</div><p class="testimonial-text">ChatGPT c'est bien, mais je dois tout ré-expliquer mon cours à chaque fois. Quelque chose qui connaît déjà mon contexte académique, ça serait vraiment utile.</p><div class="testimonial-author"><div class="author-avatar">TG</div><div><div class="author-name">Thomas G.</div><div class="author-role">Étudiant en psychologie · UdeM</div></div></div></div>
+      <div class="testimonial-card reveal"><div class="quote-mark">"</div><p class="testimonial-text">Je fais 1h30 de transport par jour. Si je pouvais utiliser ce temps pour réviser avec des quiz adaptés à mon cours au lieu de scroller, je serais tellement plus serein avant mes examens.</p><div class="testimonial-author"><div class="author-avatar">SB</div><div><div class="author-name">Sofia B.</div><div class="author-role">Étudiante en sciences · Cégep</div></div></div></div>
+      <div class="testimonial-card reveal"><div class="quote-mark">"</div><p class="testimonial-text">Le problème c'est pas que je travaille pas — c'est que je travaille sur les mauvaises choses. J'aurais besoin d'un outil qui sait vraiment où sont mes trous.</p><div class="testimonial-author"><div class="author-avatar">KD</div><div><div class="author-name">Karim D.</div><div class="author-role">Étudiant en administration · HEC Montréal</div></div></div></div>
+    </div>
+  </div>
+</section>
+<section class="cta-section" id="telecharger">
+  <div class="cta-inner">
+    <p class="section-label">Télécharger</p>
+    <h2 class="reveal">Commence à étudier intelligemment — dès aujourd'hui</h2>
+    <p class="reveal">Disponible sur iOS et Android. Gratuit pour commencer.</p>
+    <div class="cta-buttons reveal">
+      <a href="#" class="store-btn"><div class="store-icon">🍎</div><div class="store-btn-texts"><span class="store-btn-sub">Télécharger sur</span><span class="store-btn-name">App Store</span></div></a>
+      <a href="#" class="store-btn"><div class="store-icon">▶</div><div class="store-btn-texts"><span class="store-btn-sub">Disponible sur</span><span class="store-btn-name">Google Play</span></div></a>
+    </div>
+  </div>
+</section>
+<footer>
+  <div class="logo">Study<span style="color:var(--accent)">Pulse</span></div>
+  <div class="footer-copy">© 2026 StudyPulse · Équipe G · ENTR11000 HEC Montréal</div>
+</footer>
+<script>
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+  }, { threshold: 0.12 });
+  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+  document.querySelectorAll('.quiz-opt').forEach(opt => {
+    opt.addEventListener('click', () => {
+      document.querySelectorAll('.quiz-opt').forEach(o => o.classList.remove('active'));
+      opt.classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>
