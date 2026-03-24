@@ -1,0 +1,767 @@
+# StudyPulse — Document de spécifications MVP complet
+### Pour Claude Code · Prêt à développer
+
+---
+
+## 0. CONTEXTE & MISSION
+
+Tu vas construire le MVP de **StudyPulse**, une web app d'étude intelligente destinée aux étudiants québécois de cégep et d'université. Ce document contient **tout ce dont tu as besoin** : vision produit, architecture technique, design système, fonctionnalités détaillées, et stratégie de monétisation.
+
+**Objectif du MVP :** Valider que les étudiants reviennent utiliser l'app après leur premier plan d'étude généré. C'est le moment de vérité défini par le fondateur lui-même.
+
+**Principe directeur :** Ne jamais faire attendre l'utilisateur. Chaque interaction doit être instantanée ou donner l'impression de l'être. La rapidité et la fluidité sont la fonctionnalité principale.
+
+---
+
+## 1. VISION PRODUIT
+
+### Problème résolu (validé par 10+ entrevues terrain)
+1. **Approche linéaire inefficace** — Les étudiants relisent tout sans prioriser, perdant du temps sur ce qu'ils maîtrisent déjà.
+2. **IA sans contexte académique** — ChatGPT ne connaît pas le plan de cours, les règles d'examen, ni le profil de l'étudiant. Chaque session nécessite un long prompting manuel.
+3. **Mobilité non exploitée** — 1h à 1h30 de transport/jour sans outil mobile adapté à l'étude.
+
+### Proposition de valeur (phrase exacte)
+> *"L'assistant d'étude mobile qui connecte ton calendrier et tes outils pour planifier automatiquement tes sessions et cibler tes lacunes — aucun effort quotidien requis."*
+
+### Cible principale
+- Étudiants universitaires en baccalauréat chargé (pharmacie, psychologie, administration, sciences)
+- Utilisateurs du transport en commun de Montréal
+- Budget limité, très occupés, frustrés par les outils génériques
+
+---
+
+## 2. DÉCISIONS TECHNIQUES (faites, ne pas remettre en question)
+
+### Stack technologique
+```
+Frontend : Next.js 14 (App Router) + TypeScript
+Styling   : Tailwind CSS + shadcn/ui
+Backend   : Next.js API Routes (serverless)
+Base de données : Supabase (PostgreSQL + Auth + Storage)
+IA        : OpenAI API (GPT-4o pour la génération, text-embedding-3-small pour les embeddings)
+PDF parse : pdf-parse (npm)
+Paiements : Stripe (Checkout + Webhooks + Customer Portal)
+Déploiement : Vercel (gratuit pour commencer)
+```
+
+### Pourquoi ces choix
+- **Next.js** : Full-stack dans un seul repo, déploiement Vercel en un clic, SEO natif pour acquisition organique future
+- **Supabase** : Auth gratuite, stockage fichiers intégré (PDFs), Row Level Security, pas besoin de backend séparé
+- **OpenAI GPT-4o** : Meilleur rapport qualité/coût pour l'analyse de documents académiques + génération de quiz
+- **Stripe** : Standard industrie, Checkout hébergé = zéro PCI compliance à gérer
+- **Vercel** : Gratuit jusqu'à trafic significatif, déploiements preview automatiques
+
+### Coûts estimés pour le MVP (budget minimal)
+| Service | Coût |
+|---------|------|
+| Vercel | Gratuit |
+| Supabase | Gratuit (500MB DB, 1GB storage) |
+| OpenAI API | ~0.01–0.05$ par upload de cours |
+| Stripe | 2.9% + 0.30$ par transaction |
+| **Total fixe** | **~0$/mois** jusqu'aux premiers utilisateurs |
+
+---
+
+## 3. ARCHITECTURE DE L'APPLICATION
+
+### Structure des dossiers (Next.js App Router)
+```
+studypulse/
+├── app/
+│   ├── (auth)/
+│   │   ├── login/page.tsx
+│   │   └── signup/page.tsx
+│   ├── (dashboard)/
+│   │   ├── layout.tsx              ← sidebar + nav persistante
+│   │   ├── dashboard/page.tsx      ← vue principale
+│   │   ├── courses/
+│   │   │   ├── page.tsx            ← liste des cours
+│   │   │   └── [id]/page.tsx       ← détail d'un cours
+│   │   ├── quiz/
+│   │   │   └── [sessionId]/page.tsx ← session de quiz active
+│   │   ├── flashcards/
+│   │   │   └── [courseId]/page.tsx
+│   │   └── settings/page.tsx
+│   ├── api/
+│   │   ├── courses/
+│   │   │   ├── upload/route.ts     ← upload + parsing PDF
+│   │   │   └── [id]/analyze/route.ts ← génération embeddings
+│   │   ├── quiz/
+│   │   │   ├── generate/route.ts   ← génération quiz ciblé
+│   │   │   └── submit/route.ts     ← sauvegarde résultats
+│   │   ├── flashcards/
+│   │   │   └── generate/route.ts
+│   │   ├── study-plan/
+│   │   │   └── generate/route.ts   ← plan d'étude personnalisé
+│   │   └── stripe/
+│   │       ├── checkout/route.ts
+│   │       └── webhook/route.ts
+│   ├── layout.tsx
+│   └── page.tsx                    ← landing page publique
+├── components/
+│   ├── ui/                         ← shadcn components
+│   ├── dashboard/
+│   ├── quiz/
+│   ├── flashcards/
+│   └── upload/
+├── lib/
+│   ├── supabase/
+│   │   ├── client.ts
+│   │   └── server.ts
+│   ├── openai.ts
+│   ├── stripe.ts
+│   └── pdf-parser.ts
+└── types/
+    └── database.ts                 ← types Supabase générés
+```
+
+---
+
+## 4. SCHÉMA DE BASE DE DONNÉES (Supabase / PostgreSQL)
+
+```sql
+-- Utilisateurs (géré par Supabase Auth, on étend avec profiles)
+create table profiles (
+  id uuid references auth.users primary key,
+  email text not null,
+  full_name text,
+  university text,               -- "Université de Montréal", "HEC Montréal", etc.
+  program text,                  -- "Pharmacie", "Administration", etc.
+  plan text default 'free',      -- 'free' | 'pro'
+  stripe_customer_id text,
+  stripe_subscription_id text,
+  created_at timestamptz default now()
+);
+
+-- Cours uploadés
+create table courses (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references profiles(id) on delete cascade,
+  title text not null,
+  description text,
+  exam_date date,                -- date de l'examen pour planification
+  file_url text,                 -- URL du PDF dans Supabase Storage
+  content_text text,             -- texte extrait du PDF
+  total_concepts integer default 0,
+  mastery_score float default 0, -- 0.0 à 1.0 (score global de maîtrise)
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+-- Concepts/chapitres extraits d'un cours
+create table concepts (
+  id uuid primary key default gen_random_uuid(),
+  course_id uuid references courses(id) on delete cascade,
+  title text not null,
+  content text not null,         -- texte brut du concept
+  embedding vector(1536),        -- OpenAI text-embedding-3-small
+  mastery_score float default 0, -- score de maîtrise spécifique à ce concept
+  times_tested integer default 0,
+  times_correct integer default 0,
+  last_tested_at timestamptz,
+  created_at timestamptz default now()
+);
+
+-- Sessions de quiz
+create table quiz_sessions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references profiles(id) on delete cascade,
+  course_id uuid references courses(id) on delete cascade,
+  mode text not null,            -- 'adaptive' | 'review' | 'exam_prep'
+  total_questions integer,
+  correct_answers integer default 0,
+  score float,                   -- 0.0 à 1.0
+  duration_seconds integer,
+  completed_at timestamptz,
+  created_at timestamptz default now()
+);
+
+-- Questions individuelles d'un quiz
+create table quiz_questions (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid references quiz_sessions(id) on delete cascade,
+  concept_id uuid references concepts(id),
+  question_text text not null,
+  options jsonb not null,        -- ["option A", "option B", "option C", "option D"]
+  correct_option integer not null, -- index 0-3
+  user_answer integer,           -- index 0-3 (null si pas répondu)
+  is_correct boolean,
+  explanation text,              -- explication générée par GPT-4o
+  created_at timestamptz default now()
+);
+
+-- Flashcards
+create table flashcards (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references profiles(id) on delete cascade,
+  course_id uuid references courses(id) on delete cascade,
+  concept_id uuid references concepts(id),
+  front text not null,
+  back text not null,
+  -- Algorithme SM-2 (spaced repetition)
+  ease_factor float default 2.5,
+  interval_days integer default 1,
+  repetitions integer default 0,
+  next_review_date date default current_date,
+  last_reviewed_at timestamptz,
+  created_at timestamptz default now()
+);
+
+-- Plans d'étude générés
+create table study_plans (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references profiles(id) on delete cascade,
+  generated_at timestamptz default now(),
+  plan_data jsonb not null,      -- structure détaillée du plan
+  is_active boolean default true
+);
+
+-- Activer l'extension pgvector pour les embeddings
+create extension if not exists vector;
+
+-- Row Level Security (chaque user voit seulement ses données)
+alter table profiles enable row level security;
+alter table courses enable row level security;
+alter table concepts enable row level security;
+alter table quiz_sessions enable row level security;
+alter table quiz_questions enable row level security;
+alter table flashcards enable row level security;
+alter table study_plans enable row level security;
+
+-- Policies RLS (exemple pour courses, reproduire pour toutes les tables)
+create policy "Users can only access their own courses"
+  on courses for all using (auth.uid() = user_id);
+```
+
+---
+
+## 5. FONCTIONNALITÉS MVP — DÉTAIL COMPLET
+
+### FEATURE 1 : Authentification
+**Pages :** `/login` et `/signup`
+- Email + mot de passe via Supabase Auth
+- Google OAuth (bouton "Continuer avec Google") — critique pour réduire la friction
+- Après inscription : onboarding rapide (université, programme, 2 questions max)
+- Redirection vers `/dashboard` après connexion
+- Session persistante (JWT géré par Supabase)
+
+---
+
+### FEATURE 2 : Upload et analyse de cours
+**Page :** `/courses` et modal d'upload
+
+**Flow utilisateur :**
+1. L'étudiant clique "Ajouter un cours"
+2. Il glisse-dépose son PDF (plan de cours, notes, slides)
+3. L'app affiche une barre de progression pendant l'analyse
+4. Une fois analysé : le cours apparaît avec ses concepts extraits
+
+**Flow technique (API `/api/courses/upload`) :**
+```typescript
+// 1. Upload PDF vers Supabase Storage
+// 2. Extraire le texte avec pdf-parse
+// 3. Envoyer le texte à GPT-4o avec ce prompt système :
+
+const COURSE_ANALYSIS_PROMPT = `
+Tu es un assistant pédagogique expert. Analyse ce document académique et extrait :
+1. Le titre du cours
+2. Une liste structurée de 10-30 concepts clés avec leur explication (200-400 mots chacun)
+3. Les chapitres/modules principaux
+4. Le niveau de difficulté estimé (1-5)
+
+Réponds UNIQUEMENT en JSON valide avec cette structure :
+{
+  "course_title": "string",
+  "concepts": [
+    {
+      "title": "Nom du concept",
+      "content": "Explication détaillée...",
+      "chapter": "Nom du chapitre",
+      "difficulty": 1-5
+    }
+  ]
+}
+`;
+
+// 4. Générer les embeddings pour chaque concept (text-embedding-3-small)
+// 5. Sauvegarder tout dans Supabase
+// 6. Retourner le cours avec ses concepts au frontend
+```
+
+**Limites selon le plan :**
+- Gratuit : 2 cours maximum
+- Pro : illimité
+
+---
+
+### FEATURE 3 : Quiz adaptatif (fonctionnalité CŒUR)
+**Page :** `/quiz/[sessionId]`
+
+C'est **la fonctionnalité qui détermine si l'utilisateur revient**. Elle doit être fluide, rapide, et donner l'impression que l'app "sait" ce que l'étudiant maîtrise ou non.
+
+**Algorithme de sélection des questions :**
+```typescript
+// Priorité aux concepts avec :
+// 1. mastery_score le plus bas (lacunes confirmées)
+// 2. last_tested_at le plus ancien (révision espacée)
+// 3. times_tested = 0 (jamais vu)
+// Formule : priority_score = (1 - mastery_score) * 0.6 + recency_weight * 0.4
+```
+
+**Génération des questions (API `/api/quiz/generate`) :**
+```typescript
+const QUIZ_GENERATION_PROMPT = `
+Tu es un professeur qui crée des questions d'examen rigoureuses.
+Voici un concept académique : {concept_content}
+
+Génère 1 question à choix multiples de qualité universitaire avec :
+- Une question claire et précise
+- 4 options (A, B, C, D) — une seule bonne réponse
+- L'index de la bonne réponse (0, 1, 2, ou 3)
+- Une explication de 2-3 phrases sur pourquoi c'est la bonne réponse
+
+Niveau de difficulté demandé : {difficulty} (1=facile, 5=très difficile)
+Cours : {course_title}
+
+Réponds UNIQUEMENT en JSON :
+{
+  "question": "string",
+  "options": ["string", "string", "string", "string"],
+  "correct_index": 0-3,
+  "explanation": "string"
+}
+`;
+```
+
+**UI du quiz :**
+- Design plein écran, épuré, focalisé (zéro distraction)
+- Indicateur de progression (question X sur Y)
+- Animation de feedback immédiat : vert (correct) / rouge (incorrect)
+- Affichage de l'explication après chaque réponse
+- Timer optionnel (mode exam prep)
+- À la fin : score, récapitulatif des lacunes, bouton "Continuer à réviser"
+
+**Mise à jour des scores après le quiz :**
+```typescript
+// Pour chaque question répondue :
+// Si correct : mastery_score = mastery_score + (1 - mastery_score) * 0.2
+// Si incorrect : mastery_score = mastery_score * 0.8
+// Mettre à jour le mastery_score global du cours (moyenne des concepts)
+```
+
+**Limites selon le plan :**
+- Gratuit : 10 questions par jour
+- Pro : illimité + mode "détection lacunes" (prioritise intelligemment)
+
+---
+
+### FEATURE 4 : Flashcards avec répétition espacée
+**Page :** `/flashcards/[courseId]`
+
+**Génération (API `/api/flashcards/generate`) :**
+```typescript
+const FLASHCARD_PROMPT = `
+Crée 5-10 flashcards à partir de ce concept académique : {concept_content}
+Chaque flashcard doit avoir :
+- Recto (front) : une question ou terme clé (max 15 mots)
+- Verso (back) : la réponse ou définition (max 50 mots)
+
+Format JSON :
+{
+  "flashcards": [
+    { "front": "string", "back": "string" }
+  ]
+}
+`;
+```
+
+**Algorithme SM-2 (répétition espacée) :**
+```typescript
+// Après chaque révision, l'utilisateur évalue sa maîtrise (1-5)
+// SM-2 calcule le prochain intervalle de révision
+function sm2(quality: number, easeFactor: number, interval: number, repetitions: number) {
+  if (quality >= 3) {
+    if (repetitions === 0) interval = 1;
+    else if (repetitions === 1) interval = 6;
+    else interval = Math.round(interval * easeFactor);
+    repetitions++;
+    easeFactor = Math.max(1.3, easeFactor + 0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
+  } else {
+    interval = 1;
+    repetitions = 0;
+  }
+  return { interval, easeFactor, repetitions };
+}
+```
+
+**UI des flashcards :**
+- Animation flip 3D au clic (CSS transform)
+- Boutons de difficulté : Facile / Moyen / Difficile / À revoir
+- Optimisé pour le pouce (boutons en bas, grands)
+- Mode portrait mobile prioritaire
+
+---
+
+### FEATURE 5 : Plan d'étude personnalisé
+**Affiché dans :** `/dashboard` (section principale)
+
+**Génération (API `/api/study-plan/generate`) :**
+```typescript
+const STUDY_PLAN_PROMPT = `
+Tu es un coach académique expert. Crée un plan d'étude personnalisé.
+
+Données de l'étudiant :
+- Cours : {courses_with_exam_dates}
+- Scores de maîtrise par cours : {mastery_scores}
+- Concepts avec les plus faibles scores : {weak_concepts}
+- Disponibilité quotidienne estimée : {daily_minutes} minutes
+
+Génère un plan pour les 7 prochains jours avec :
+- Sessions quotidiennes de 15-45 minutes max (adapté au transport)
+- Priorité aux cours avec examen proche ET score faible
+- Mix quiz + flashcards pour chaque session
+- Objectif clair pour chaque jour
+
+Réponds en JSON :
+{
+  "week_summary": "string (2 phrases max)",
+  "days": [
+    {
+      "date": "YYYY-MM-DD",
+      "sessions": [
+        {
+          "course_title": "string",
+          "activity": "quiz" | "flashcards" | "review",
+          "duration_minutes": number,
+          "focus": "string (ce sur quoi se concentrer)",
+          "concepts_to_review": ["concept1", "concept2"]
+        }
+      ]
+    }
+  ]
+}
+`;
+```
+
+**Affichage dashboard :**
+- Carte "Aujourd'hui" avec la session recommandée
+- Barre de progression hebdomadaire
+- Bouton "Commencer la session" → lance directement le quiz ou les flashcards ciblés
+
+---
+
+### FEATURE 6 : Système de monétisation (Stripe)
+
+**Plans :**
+
+| Feature | Gratuit | Pro (5$/mois) |
+|---------|---------|---------------|
+| Cours uploadés | 2 | Illimité |
+| Questions quiz/jour | 10 | Illimité |
+| Flashcards | 20/cours | Illimité |
+| Détection lacunes avancée | ❌ | ✅ |
+| Plan d'étude personnalisé | Basique | Complet |
+| Historique de progression | 7 jours | Illimité |
+| Intégration Google Calendar | ❌ | ✅ |
+
+**Flow de paiement :**
+1. L'utilisateur atteint une limite → banner "Passe à Pro"
+2. Clic → Stripe Checkout (hébergé par Stripe, zero friction)
+3. Webhook Stripe → mise à jour `profiles.plan = 'pro'` dans Supabase
+4. Customer Portal Stripe pour gérer/annuler l'abonnement
+
+**API Routes Stripe :**
+```typescript
+// /api/stripe/checkout/route.ts
+// Crée une Stripe Checkout Session avec :
+// - price_id du plan Pro mensuel
+// - success_url: /dashboard?upgraded=true
+// - cancel_url: /dashboard
+// - customer_email: user.email
+// - metadata: { user_id: user.id }
+
+// /api/stripe/webhook/route.ts
+// Écoute : checkout.session.completed → activer Pro
+// Écoute : customer.subscription.deleted → rétrograder vers Free
+```
+
+**Gate des features (middleware) :**
+```typescript
+// lib/feature-gate.ts
+export async function checkLimit(userId: string, feature: string): Promise<boolean> {
+  const profile = await getProfile(userId);
+  if (profile.plan === 'pro') return true;
+  
+  // Vérifier les compteurs selon la feature
+  switch(feature) {
+    case 'course_upload':
+      const count = await countCourses(userId);
+      return count < 2;
+    case 'quiz_question':
+      const today = await countQuestionsToday(userId);
+      return today < 10;
+    // etc.
+  }
+}
+```
+
+---
+
+## 6. DESIGN SYSTÈME
+
+### Identité visuelle StudyPulse
+**Palette de couleurs :**
+```css
+:root {
+  --navy: #0f1f3d;           /* Fond principal */
+  --navy-mid: #1a3260;       /* Fond secondaire */
+  --navy-light: #243d72;     /* Cartes, hover */
+  --accent: #4fffb0;         /* Vert menthe — action principale */
+  --accent-dim: #2dd68a;     /* Vert foncé — hover */
+  --off-white: #f0ede6;      /* Texte principal */
+  --muted: #8a9bbf;          /* Texte secondaire */
+  --danger: #ff6b6b;         /* Erreurs, mauvaise réponse */
+  --success: #4fffb0;        /* Bonne réponse */
+  --warning: #ffd93d;        /* Attention */
+  --border: rgba(255,255,255,0.08);
+  --card-bg: rgba(255,255,255,0.04);
+}
+```
+
+**Typographie :**
+```css
+/* Titres — Syne (Google Fonts) */
+font-family: 'Syne', sans-serif;  /* weights: 700, 800 */
+
+/* Corps — DM Sans (Google Fonts) */
+font-family: 'DM Sans', sans-serif;  /* weights: 300, 400, 500 */
+```
+
+**Principes de design :**
+- Dark mode par défaut (réduit la fatigue visuelle pour l'étude)
+- Coins arrondis généreux (border-radius: 16px pour cartes, 100px pour boutons)
+- Ombres subtiles sur les cartes interactives
+- Animations d'entrée au scroll (fadeUp + stagger)
+- Feedback visuel immédiat sur toutes les interactions
+- Mobile-first : tout doit fonctionner parfaitement à 375px de large
+
+**Composants clés à construire :**
+- `<CourseCard>` — carte de cours avec score de maîtrise (anneau circulaire)
+- `<QuizQuestion>` — question + 4 options + animation feedback
+- `<FlashCard>` — carte avec animation flip 3D
+- `<StudyPlanDay>` — journée du plan avec sessions
+- `<MasteryRing>` — cercle de progression SVG animé
+- `<UpgradeModal>` — modal de mise à niveau Pro (doit convertir)
+- `<ProgressBar>` — barre de progression animée
+- `<StreakBadge>` — badge de série quotidienne (gamification)
+
+---
+
+## 7. PAGES EN DÉTAIL
+
+### Page : `/` (Landing page publique)
+Reprendre exactement le design de la landing page déjà créée (`studypulse.html`) :
+- Hero avec accroche principale
+- Section problème (3 pain points)
+- Section solution (4 bénéfices + mockup téléphone)
+- Tarification (Gratuit vs Pro)
+- Témoignages
+- CTA final avec boutons App Store fictifs → rediriger vers `/signup`
+- Navbar avec lien "Se connecter" et bouton CTA "Commencer gratuitement"
+
+### Page : `/dashboard`
+Structure en 3 colonnes sur desktop, 1 colonne sur mobile :
+```
+[Sidebar gauche]          [Contenu principal]           [Sidebar droite]
+- Logo StudyPulse         - Bonjour {prénom} 👋          - Streak: X jours
+- Navigation              - Plan du jour (carte)         - Prochain examen
+  • Dashboard             - Cours récents                - Progression semaine
+  • Mes cours             - Stats rapides
+  • Quiz
+  • Flashcards
+  • Paramètres
+- [Upgrade to Pro] banner
+  (si plan free)
+```
+
+### Page : `/courses`
+- Grille de CourseCard (2 colonnes desktop, 1 mobile)
+- Bouton "+" flottant en bas à droite → modal d'upload
+- Chaque carte affiche : titre, score de maîtrise (anneau), date d'examen, dernier accès
+
+### Page : `/courses/[id]`
+- Header : titre du cours, score global, date examen
+- Onglets : Vue d'ensemble | Concepts | Quiz | Flashcards
+- Liste des concepts avec score individuel
+- Boutons d'action : "Commencer quiz ciblé" | "Réviser flashcards"
+
+### Page : `/quiz/[sessionId]`
+- Plein écran, fond sombre
+- Header : nom du cours + progression (3/10)
+- Question centrale (grande typographie)
+- 4 options en grille 2x2 sur mobile
+- Animation : vert/rouge après réponse + explication
+- Footer : bouton "Question suivante"
+
+### Page : `/settings`
+- Profil (université, programme)
+- Plan actuel + bouton gérer abonnement (Stripe Customer Portal)
+- Préférences de notification
+- Danger zone : supprimer le compte
+
+---
+
+## 8. GAMIFICATION (différenciateur clé pour la rétention)
+
+Ces éléments sont **essentiels** pour que les étudiants reviennent chaque jour :
+
+### Système de streak
+- Compteur de jours consécutifs d'utilisation (comme Duolingo)
+- Badge affiché dans le dashboard
+- Notification push si l'utilisateur n'a pas étudié avant 20h
+- "Streak freeze" : 1 par semaine pour les Pro
+
+### Système de niveaux par cours
+- Niveau 1 (0-20% maîtrise) : Débutant
+- Niveau 2 (20-40%) : En progression
+- Niveau 3 (40-60%) : Intermédiaire
+- Niveau 4 (60-80%) : Avancé
+- Niveau 5 (80-100%) : Expert ⭐
+- Animation de level-up avec confettis
+
+### Statistiques motivantes
+- "Tu as répondu correctement à X questions cette semaine"
+- "Tu maîtrises maintenant X% de ton cours de Pharmacologie"
+- "Plus que Y concepts à réviser avant ton examen"
+
+---
+
+## 9. VARIABLES D'ENVIRONNEMENT REQUISES
+
+```bash
+# .env.local
+
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJxxx
+SUPABASE_SERVICE_ROLE_KEY=eyJxxx
+
+# OpenAI
+OPENAI_API_KEY=sk-xxx
+
+# Stripe
+STRIPE_SECRET_KEY=sk_test_xxx
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_xxx
+STRIPE_WEBHOOK_SECRET=whsec_xxx
+STRIPE_PRO_PRICE_ID=price_xxx
+
+# App
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+```
+
+---
+
+## 10. ORDRE DE DÉVELOPPEMENT RECOMMANDÉ
+
+Construire dans cet ordre exact pour avoir quelque chose de fonctionnel et testable le plus vite possible :
+
+### Phase 1 — Fondations (jour 1-2)
+1. Init projet Next.js 14 + TypeScript + Tailwind + shadcn/ui
+2. Setup Supabase (auth + tables SQL ci-dessus)
+3. Pages `/login` et `/signup` fonctionnelles avec Google OAuth
+4. Layout dashboard avec sidebar
+
+### Phase 2 — Feature cœur (jour 3-5)
+5. Upload de PDF → parsing → extraction des concepts via GPT-4o
+6. Affichage du cours avec ses concepts
+7. Génération et session de quiz (la feature la plus importante)
+8. Mise à jour des scores de maîtrise après quiz
+
+### Phase 3 — Features secondaires (jour 6-8)
+9. Flashcards avec SM-2
+10. Plan d'étude automatique dans le dashboard
+11. Gamification (streak, niveaux, stats)
+
+### Phase 4 — Monétisation (jour 9-10)
+12. Intégration Stripe complète (Checkout + Webhook + Portal)
+13. Feature gates (limites Free vs Pro)
+14. Page settings avec gestion abonnement
+
+### Phase 5 — Polish (jour 11-12)
+15. Landing page publique (reprendre le HTML existant, l'intégrer)
+16. Animations et micro-interactions
+17. Optimisation mobile
+18. Tests de bout en bout
+
+---
+
+## 11. POINTS D'ATTENTION CRITIQUES
+
+### Sécurité
+- **Toujours valider** que `user_id` correspond à l'utilisateur connecté dans chaque API route
+- **Row Level Security** activée sur toutes les tables Supabase (déjà dans le schéma)
+- **Ne jamais exposer** `SUPABASE_SERVICE_ROLE_KEY` côté client
+- **Valider les types de fichiers** à l'upload (PDF seulement, max 10MB)
+- **Rate limiting** sur les routes OpenAI pour éviter les abus
+
+### Performance
+- Générer les embeddings en **arrière-plan** (ne pas bloquer l'UI)
+- **Paginer** les listes de concepts (50 max par page)
+- **Cacher** les plans d'étude dans Supabase (ne pas regénérer à chaque refresh)
+- Utiliser `streaming` pour la génération de quiz (afficher les questions au fur et à mesure)
+
+### UX mobile (priorité absolue)
+- Tester sur iPhone SE (375px) — c'est le pire cas
+- Boutons minimum 44px de hauteur (accessibilité tactile)
+- Swipe pour naviguer entre flashcards
+- Pas de hover states bloquants sur mobile
+
+### Coûts OpenAI à surveiller
+- Limiter l'analyse initiale à **30 concepts max** par cours
+- Utiliser `gpt-4o-mini` pour les questions simples, `gpt-4o` pour l'analyse de documents
+- Logger tous les appels API dans Supabase pour le debugging
+
+---
+
+## 12. STRATÉGIE DE LANCEMENT (post-MVP)
+
+### Acquisition utilisateurs (0$)
+1. **TikTok/Instagram Reels** — vidéos "comment j'ai transformé mon transport en étude" (contenu organique)
+2. **Associations étudiantes** — approcher les VP académiques de chaque université
+3. **Reddit** — r/Quebec, r/HECMontreal, r/UniversiteDeMontreal
+4. **Bouche à oreille** — donner 3 mois Pro gratuits aux early adopters qui parrainent 3 amis
+
+### Métriques à suivre dès le départ
+- **DAU/MAU ratio** (objectif : >40% = forte rétention)
+- **Quiz completion rate** (objectif : >70%)
+- **Day 1 / Day 7 / Day 30 retention**
+- **Conversion Free → Pro** (objectif : >8%)
+- **Coût par question générée** (surveiller les coûts OpenAI)
+
+### Extensions futures (post-PMF)
+- App mobile native React Native (partager le code business logic)
+- Intégration Google Calendar / Apple Calendar
+- Licences institutionnelles (universités et cégeps)
+- Marketplace de cours partagés entre étudiants du même programme
+- Mode collaboratif (étudier en groupe)
+
+---
+
+## 13. INSTRUCTIONS FINALES POUR CLAUDE CODE
+
+**Tu as tout ce qu'il te faut dans ce document.** Voici comment procéder :
+
+1. **Commence par la Phase 1** (fondations) — ne pas sauter d'étapes
+2. **Construis chaque feature de bout en bout** avant de passer à la suivante
+3. **Teste chaque API route avec des données réelles** avant de construire l'UI
+4. Pour le design, **respecte strictement le système de couleurs et typographies** défini en section 6
+5. **Priorise le mobile** sur chaque composant
+6. Si une décision technique n'est pas couverte dans ce document, **choisis la solution la plus simple** qui fonctionne
+7. **Ne pas implémenter** la partie intégration Google Calendar dans le MVP (trop complexe, pas critique)
+8. Le nom de l'app est **StudyPulse**, le slogan est **"Transforme ton temps mort en étude intelligente"**
+
+Bonne chance — ce produit a un vrai potentiel commercial.
+
+---
+
+*Document préparé par Claude · Mars 2026 · Pour Xavier, fondateur StudyPulse*
