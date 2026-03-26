@@ -41,11 +41,11 @@ function LandingNav() {
         Study<span style={{ color: "#4fffb0" }}>Pulse</span>
       </Link>
       <Link
-        href="/signup"
+        href="/dashboard"
         className="font-syne font-bold text-[0.85rem] tracking-[0.04em] px-[22px] py-[10px] rounded-full no-underline transition-all hover:-translate-y-0.5"
         style={{ background: "#4fffb0", color: "#0f1f3d" }}
       >
-        Commencer gratuitement
+        Ouvrir l&apos;application
       </Link>
     </nav>
   );
@@ -102,7 +102,7 @@ function HeroSection() {
         style={{ opacity: 0, animation: "fadeUp 0.7s 0.65s forwards" }}
       >
         <Link
-          href="/signup"
+          href="/dashboard"
           className="inline-flex items-center gap-2.5 font-syne font-bold text-base px-8 py-4 rounded-full no-underline transition-all hover:-translate-y-1"
           style={{ background: "#4fffb0", color: "#0f1f3d" }}
         >
@@ -111,7 +111,7 @@ function HeroSection() {
             <polyline points="7 10 12 15 17 10" />
             <line x1="12" y1="15" x2="12" y2="3" />
           </svg>
-          Commencer gratuitement
+          Ouvrir l&apos;application
         </Link>
         <Link
           href="#solution"
@@ -326,7 +326,7 @@ function PricingSection() {
                 </li>
               ))}
             </ul>
-            <Link href="/signup" className="block text-center border rounded-full font-syne font-semibold text-[0.9rem] py-3.5 no-underline transition-all" style={{ borderColor: "rgba(255,255,255,0.08)", color: "#f0ede6" }}>
+            <Link href="/dashboard" className="block text-center border rounded-full font-syne font-semibold text-[0.9rem] py-3.5 no-underline transition-all" style={{ borderColor: "rgba(255,255,255,0.08)", color: "#f0ede6" }}>
               Commencer gratuitement
             </Link>
           </div>
@@ -346,7 +346,7 @@ function PricingSection() {
                 </li>
               ))}
             </ul>
-            <Link href="/signup" className="block text-center rounded-full font-syne font-bold text-[0.9rem] py-3.5 no-underline transition-all hover:-translate-y-0.5" style={{ background: "#4fffb0", color: "#0f1f3d" }}>
+            <Link href="/dashboard" className="block text-center rounded-full font-syne font-bold text-[0.9rem] py-3.5 no-underline transition-all hover:-translate-y-0.5" style={{ background: "#4fffb0", color: "#0f1f3d" }}>
               Essayer Pro gratuitement
             </Link>
           </div>
@@ -406,23 +406,17 @@ function CTASection() {
         </h2>
         <p className="reveal mt-5 text-base" style={{ color: "#8a9bbf" }}>Application web gratuite. Aucune installation requise.</p>
         <div className="reveal flex gap-5 justify-center mt-11 flex-wrap items-center">
-          {[
-            { icon: "🚀", sub: "Commencer sur", name: "StudyPulse Web", href: "/signup" },
-            { icon: "🔑", sub: "Déjà un compte", name: "Se connecter", href: "/login" },
-          ].map(({ icon, sub, name, href }) => (
-            <Link
-              key={name}
-              href={href}
-              className="inline-flex items-center gap-3 px-7 py-3.5 rounded-2xl no-underline font-medium transition-all hover:-translate-y-0.5"
-              style={{ background: "#f0ede6", color: "#0f1f3d" }}
-            >
-              <span className="text-[1.6rem] leading-none">{icon}</span>
-              <span>
-                <span className="text-[0.7rem] opacity-60 block">{sub}</span>
-                <span className="font-syne font-bold text-[0.95rem] block">{name}</span>
-              </span>
-            </Link>
-          ))}
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center gap-3 px-7 py-3.5 rounded-2xl no-underline font-medium transition-all hover:-translate-y-0.5"
+            style={{ background: "#4fffb0", color: "#0f1f3d" }}
+          >
+            <span className="text-[1.6rem] leading-none">🚀</span>
+            <span>
+              <span className="text-[0.7rem] opacity-60 block">Accéder à</span>
+              <span className="font-syne font-bold text-[0.95rem] block">StudyPulse</span>
+            </span>
+          </Link>
         </div>
       </div>
     </section>
