@@ -67,6 +67,10 @@ export default function CoursePage() {
       });
       const data = await res.json();
       if (data.session_id) {
+        // Store questions in sessionStorage so the quiz page can retrieve them
+        if (data.questions) {
+          sessionStorage.setItem(`quiz-${data.session_id}`, JSON.stringify(data.questions));
+        }
         router.push(`/quiz/${data.session_id}`);
       }
     } finally {
@@ -183,7 +187,7 @@ export default function CoursePage() {
             <Brain size={24} style={{ color: "#4fffb0" }} className="mb-3" />
             <h3 className="font-syne font-bold text-off-white mb-1">Quiz adaptatif</h3>
             <p className="text-sm text-sp-muted mb-4">
-              L'algorithme sélectionne les concepts où vous avez le plus de lacunes.
+              L&apos;algorithme sélectionne les concepts où vous avez le plus de lacunes.
             </p>
             <button
               onClick={() => startQuiz("adaptive")}
@@ -269,7 +273,7 @@ export default function CoursePage() {
           <Layers size={32} style={{ color: "#ffd93d" }} className="mx-auto mb-3" />
           <h3 className="font-syne font-bold text-off-white mb-2">Flashcards pour ce cours</h3>
           <p className="text-sm text-sp-muted mb-5">
-            Les flashcards utilisent l'algorithme SM-2 pour planifier les révisions au moment optimal.
+            Les flashcards utilisent l&apos;algorithme SM-2 pour planifier les révisions au moment optimal.
           </p>
           <div className="flex gap-3 justify-center">
             <button

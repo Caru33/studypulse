@@ -5,207 +5,240 @@ export const dynamic = "force-dynamic";
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { CheckCircle, XCircle, ArrowLeft, Trophy, RotateCcw } from "lucide-react";
 import { QuizQuestion } from "@/components/quiz/QuizQuestion";
 import { LevelUpConfetti } from "@/components/ui/LevelUpConfetti";
-import { MasteryRing } from "@/components/ui/MasteryRing";
-import { ArrowLeft, Trophy, Brain } from "lucide-react";
-import type { QuizQuestion as QuizQuestionType, LevelUpEvent } from "@/types/database";
-import { createClient } from "@/lib/supabase/client";
 import { MOCK_QUIZ_QUESTIONS } from "@/lib/mock-data";
+import type { QuizQuestion as QuizQuestionType } from "@/types/database";
 
 const IS_MOCK =
   !process.env.NEXT_PUBLIC_SUPABASE_URL ||
   process.env.NEXT_PUBLIC_SUPABASE_URL.includes("your-project");
 
-type QuizState = "loading" | "quiz" | "results";
-
 interface Answer {
   question_id: string;
-  selected_option: number;
+  concept_id: string;
+  answer: number;
+  is_correct: boolean;
 }
 
 export default function QuizSessionPage() {
   const params = useParams();
   const router = useRouter();
-  const supabase = createClient();
   const sessionId = params.sessionId as string;
 
-  const [state, setState] = useState<QuizState>("loading");
   const [questions, setQuestions] = useState<QuizQuestionType[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Answer[]>([]);
-  const [results, setResults] = useState<{ score: number; correct: number; total: number; level_ups: LevelUpEvent[] } | null>(null);
+  const [completed, setCompleted] = useState(false);
+  const [finalScore, setFinalScore] = useState(0);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [loading, setLoading] = useState(true);
   const startTimeRef = useRef(Date.now());
 
   useEffect(() => {
-    async function loadSession() {
-      if (IS_MOCK) {
-        // Use mock questions with sessionId injected
-        const mockQs = MOCK_QUIZ_QUESTIONS.map((q) => ({ ...q, session_id: sessionId }));
-        setQuestions(mockQs);
-        setState("quiz");
-        startTimeRef.current = Date.now();
+    // 1. Try sessionStorage (populated by courses/new quiz pages before redirect)
+    const stored =
+      typeof window !== "undefined" ? sessionStorage.getItem(`quiz-${sessionId}`) : null;
+    if (stored) {
+      try {
+        setQuestions(JSON.parse(stored));
+        setLoading(false);
         return;
+      } catch {
+        // malformed JSON, fall through
       }
-
-      const { data } = await supabase
-        .from("quiz_questions")
-        .select("*")
-        .eq("session_id", sessionId)
-        .order("created_at", { ascending: true });
-
-      if (!data || data.length === 0) {
-        router.push("/quiz/new");
-        return;
-      }
-      setQuestions(data);
-      setState("quiz");
-      startTimeRef.current = Date.now();
     }
-    loadSession();
-  }, [sessionId, supabase, router]);
+
+    // 2. Mock fallback
+    if (IS_MOCK || sessionId.startsWith("mock-")) {
+      const qs: QuizQuestionType[] = Array.from({ length: 5 }, (_, i) => ({
+        ...MOCK_QUIZ_QUESTIONS[i % MOCK_QUIZ_QUESTIONS.length],
+        id: `${MOCK_QUIZ_QUESTIONS[i % MOCK_QUIZ_QUESTIONS.length].id}-${i}`,
+        session_id: sessionId,
+      }));
+      setQuestions(qs);
+      setLoading(false);
+      return;
+    }
+
+    // 3. Real mode: questions should have been in sessionStorage.
+    // If we arrive here, the session was likely navigated to directly.
+    // Show an empty state with a helpful message.
+    setLoading(false);
+  }, [sessionId]);
 
   async function handleAnswer(selectedOption: number, isCorrect: boolean) {
-    const question = questions[currentIndex];
-    const newAnswers = [...answers, { question_id: question.id, selected_option: selectedOption }];
-    setAnswers(newAnswers);
+    const q = questions[currentIndex];
+    const newAnswer: Answer = {
+      question_id: q.id,
+      concept_id: q.concept_id,
+      answer: selectedOption,
+      is_correct: isCorrect,
+    };
 
-    // Short delay to show correct/incorrect before moving on
-    await new Promise((r) => setTimeout(r, 1200));
+    const updatedAnswers = [...answers, newAnswer];
+    setAnswers(updatedAnswers);
 
     if (currentIndex < questions.length - 1) {
-      setCurrentIndex((i) => i + 1);
+      setTimeout(() => setCurrentIndex((i) => i + 1), 1400);
     } else {
-      // Last question — submit
-      const durationSeconds = Math.round((Date.now() - startTimeRef.current) / 1000);
+      // Last question — finalize
+      const correct = updatedAnswers.filter((a) => a.is_correct).length;
+      const score = questions.length > 0 ? correct / questions.length : 0;
+      setFinalScore(score);
 
-      if (IS_MOCK) {
-        const correct = newAnswers.filter(
-          (a, i) => a.selected_option === questions[i].correct_option
-        ).length;
-        setResults({
-          score: correct / questions.length,
-          correct,
-          total: questions.length,
-          level_ups: [],
-        });
-      } else {
-        const res = await fetch("/api/quiz/submit", {
+      // Submit to API (fire and forget)
+      if (!IS_MOCK && !sessionId.startsWith("mock-")) {
+        fetch("/api/quiz/submit", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             session_id: sessionId,
-            answers: newAnswers,
-            duration_seconds: durationSeconds,
+            answers: updatedAnswers,
+            duration_seconds: Math.floor((Date.now() - startTimeRef.current) / 1000),
           }),
-        });
-        const data = await res.json();
-        setResults(data);
+        }).catch(console.error);
       }
-      setState("results");
+
+      // Clean up sessionStorage
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem(`quiz-${sessionId}`);
+      }
+
+      if (score >= 0.7) setShowConfetti(true);
+      setTimeout(() => setCompleted(true), 1400);
     }
   }
 
-  if (state === "loading") {
+  // ── Loading ──
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center">
-          <Brain size={40} style={{ color: "#4fffb0" }} className="mx-auto mb-3 animate-pulse" />
-          <p className="text-sp-muted">Chargement des questions...</p>
+          <div className="w-12 h-12 rounded-full border-2 border-sp-accent border-t-transparent animate-spin mx-auto mb-4" />
+          <p className="text-sp-muted">Chargement du quiz...</p>
         </div>
       </div>
     );
   }
 
-  if (state === "results" && results) {
-    const pct = Math.round(results.score * 100);
+  // ── Empty ──
+  if (!loading && questions.length === 0) {
     return (
-      <>
-        <LevelUpConfetti events={results.level_ups} />
-        <div className="max-w-lg mx-auto text-center py-8">
-          <Trophy size={48} style={{ color: pct >= 70 ? "#4fffb0" : "#ffd93d" }} className="mx-auto mb-4" />
-          <h1 className="font-syne font-bold text-3xl text-off-white mb-2">
-            {pct >= 80 ? "Excellent !" : pct >= 60 ? "Bien joué !" : "Continuez !"}
-          </h1>
-          <p className="text-sp-muted mb-8">Session terminée</p>
-
-          <div className="glass-card p-6 mb-6">
-            <MasteryRing score={results.score} size={100} strokeWidth={8} />
-            <p className="text-2xl font-bold text-off-white mt-4">
-              {results.correct} / {results.total}
-            </p>
-            <p className="text-sp-muted text-sm">bonnes réponses</p>
-          </div>
-
-          {results.level_ups.length > 0 && (
-            <div className="glass-card p-4 mb-6 text-left">
-              <p className="font-semibold text-sp-accent text-sm mb-2">
-                ⭐ Niveaux atteints !
-              </p>
-              {results.level_ups.map((e) => (
-                <p key={e.concept_id} className="text-sm text-off-white">
-                  {e.concept_title} → niveau {e.new_level}
-                </p>
-              ))}
-            </div>
-          )}
-
-          {/* Per-question breakdown */}
-          <div className="glass-card p-4 mb-6 text-left space-y-2">
-            <p className="font-semibold text-off-white text-sm mb-3">Détail des réponses</p>
-            {questions.map((q, i) => {
-              const ans = answers[i];
-              const correct = ans?.selected_option === q.correct_option;
-              return (
-                <div key={q.id} className="flex items-start gap-2">
-                  <span className={`text-lg leading-none ${correct ? "text-sp-accent" : "text-danger"}`}>
-                    {correct ? "✓" : "✗"}
-                  </span>
-                  <p className="text-sm text-sp-muted leading-snug line-clamp-2">{q.question_text}</p>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="flex gap-3">
-            <Link
-              href="/dashboard"
-              className="flex-1 py-3 rounded-xl text-sm border border-white/10 text-sp-muted hover:text-off-white transition-colors text-center"
-            >
-              Tableau de bord
-            </Link>
-            <Link
-              href="/quiz/new"
-              className="flex-1 py-3 rounded-xl text-sm font-semibold text-center transition-all hover:opacity-90"
-              style={{ background: "#4fffb0", color: "#0f1f3d" }}
-            >
-              Nouveau quiz
-            </Link>
-          </div>
-        </div>
-      </>
-    );
-  }
-
-  return (
-    <div className="min-h-[calc(100vh-120px)] flex flex-col">
-      <div className="flex items-center justify-between mb-4">
-        <Link
-          href="/quiz/new"
-          className="flex items-center gap-1.5 text-sm text-sp-muted hover:text-off-white transition-colors"
-        >
-          <ArrowLeft size={14} />
-          Quitter
+      <div className="text-center py-20">
+        <p className="text-sp-muted mb-4">Aucune question trouvée pour cette session.</p>
+        <Link href="/courses" className="text-sp-accent hover:underline">
+          Retour aux cours
         </Link>
       </div>
-      <div className="flex-1">
-        <QuizQuestion
-          question={questions[currentIndex]}
-          questionNumber={currentIndex + 1}
-          totalQuestions={questions.length}
-          onAnswer={handleAnswer}
-        />
+    );
+  }
+
+  // ── Results screen ──
+  if (completed) {
+    const correct = answers.filter((a) => a.is_correct).length;
+    const pct = Math.round(finalScore * 100);
+
+    return (
+      <div className="max-w-md mx-auto py-8 text-center">
+        {showConfetti && <LevelUpConfetti />}
+
+        <div
+          className="w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6"
+          style={{
+            background:
+              finalScore >= 0.7 ? "rgba(79,255,176,0.1)" : "rgba(255,107,107,0.1)",
+          }}
+        >
+          {finalScore >= 0.7 ? (
+            <Trophy size={44} style={{ color: "#4fffb0" }} />
+          ) : (
+            <XCircle size={44} style={{ color: "#ff6b6b" }} />
+          )}
+        </div>
+
+        <h1 className="font-syne font-bold text-4xl text-off-white mb-1">{pct}%</h1>
+        <p className="text-sp-muted mb-2">
+          {correct} bonne{correct > 1 ? "s" : ""} réponse{correct > 1 ? "s" : ""} sur{" "}
+          {questions.length}
+        </p>
+        <p
+          className="text-sm font-medium mb-8"
+          style={{ color: finalScore >= 0.7 ? "#4fffb0" : "#ff6b6b" }}
+        >
+          {finalScore >= 0.9
+            ? "Excellent ! Maîtrise parfaite 🌟"
+            : finalScore >= 0.7
+            ? "Très bien ! Continue comme ça 💪"
+            : finalScore >= 0.5
+            ? "Pas mal, quelques lacunes à combler 📚"
+            : "Ces concepts nécessitent plus de révision 🔄"}
+        </p>
+
+        {/* Answer recap */}
+        <div className="glass-card p-4 mb-6 text-left">
+          <p className="text-sm font-semibold text-off-white mb-3">Récapitulatif</p>
+          <div className="space-y-2">
+            {answers.map((a, i) => (
+              <div key={i} className="flex items-center gap-2 text-sm">
+                {a.is_correct ? (
+                  <CheckCircle
+                    size={14}
+                    style={{ color: "#2dd68a" }}
+                    className="flex-shrink-0"
+                  />
+                ) : (
+                  <XCircle
+                    size={14}
+                    style={{ color: "#ff6b6b" }}
+                    className="flex-shrink-0"
+                  />
+                )}
+                <span className={a.is_correct ? "text-off-white" : "text-sp-muted"}>
+                  Question {i + 1}
+                </span>
+                <span
+                  className="ml-auto text-xs font-medium"
+                  style={{ color: a.is_correct ? "#2dd68a" : "#ff6b6b" }}
+                >
+                  {a.is_correct ? "✓" : "✗"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex gap-3">
+          <Link
+            href="/courses"
+            className="flex-1 py-3 rounded-xl text-sm border border-white/10 text-sp-muted hover:text-off-white transition-colors text-center flex items-center justify-center gap-2"
+          >
+            <ArrowLeft size={14} />
+            Mes cours
+          </Link>
+          <button
+            onClick={() => router.back()}
+            className="flex-1 py-3 rounded-xl text-sm font-semibold transition-all hover:opacity-90 flex items-center justify-center gap-2"
+            style={{ background: "#4fffb0", color: "#0f1f3d" }}
+          >
+            <RotateCcw size={14} />
+            Rejouer
+          </button>
+        </div>
       </div>
+    );
+  }
+
+  // ── Active quiz ──
+  return (
+    <div className="min-h-[70vh] flex flex-col">
+      <QuizQuestion
+        question={questions[currentIndex]}
+        questionNumber={currentIndex + 1}
+        totalQuestions={questions.length}
+        onAnswer={handleAnswer}
+      />
     </div>
   );
 }
