@@ -1,138 +1,134 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { updateMasteryScore, getMasteryLevel } from "@/lib/mastery";
-import type { LevelUpEvent } from "@/types/database";
 
-interface AnswerInput {
+const IS_MOCK =
+  !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  process.env.NEXT_PUBLIC_SUPABASE_URL.includes("your-project");
+
+interface AnswerPayload {
   question_id: string;
-  selected_option: number;
+  concept_id: string;
+  answer: number;
+  is_correct: boolean;
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
+    const {
+      session_id,
+      answers,
+      duration_seconds,
+    }: { session_id: string; answers: AnswerPayload[]; duration_seconds?: number } =
+      await req.json();
+
+    if (!answers || !Array.isArray(answers)) {
+      return NextResponse.json({ error: "answers requis" }, { status: 400 });
+    }
+
+    // Mock mode — calculate score without DB
+    if (IS_MOCK || session_id?.startsWith("mock-")) {
+      const correct = answers.filter((a) => a.is_correct).length;
+      return NextResponse.json({
+        score: answers.length > 0 ? correct / answers.length : 0,
+        correct,
+        total: answers.length,
+        level_ups: [],
+      });
+    }
+
     const supabase = await createServerSupabaseClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
 
-    if (!user) {
-      return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
-    }
+    let correct = 0;
+    const level_ups: { concept_id: string; old_level: number; new_level: number }[] = [];
 
-    const body = await request.json();
-    const sessionId: string = body.session_id;
-    const answers: AnswerInput[] = body.answers ?? [];
-    const durationSeconds: number = body.duration_seconds ?? 0;
-
-    if (!sessionId) {
-      return NextResponse.json({ error: "session_id requis" }, { status: 400 });
-    }
-
-    // Verify session belongs to user
-    const { data: session } = await supabase
-      .from("quiz_sessions")
-      .select("id, user_id, total_questions")
-      .eq("id", sessionId)
-      .eq("user_id", user.id)
-      .single();
-
-    if (!session) {
-      return NextResponse.json(
-        { error: "Session introuvable" },
-        { status: 404 }
-      );
-    }
-
-    // Fetch questions for this session
-    const { data: questions } = await supabase
-      .from("quiz_questions")
-      .select("*")
-      .eq("session_id", sessionId);
-
-    if (!questions) {
-      return NextResponse.json(
-        { error: "Questions introuvables" },
-        { status: 404 }
-      );
-    }
-
-    let correctCount = 0;
-    const levelUps: LevelUpEvent[] = [];
-
-    // Process each answer
     for (const answer of answers) {
-      const question = questions.find((q) => q.id === answer.question_id);
-      if (!question) continue;
-
-      const isCorrect = answer.selected_option === question.correct_option;
-      if (isCorrect) correctCount++;
-
-      // Update question
+      // Save answer on the question row
       await supabase
         .from("quiz_questions")
-        .update({
-          user_answer: answer.selected_option,
-          is_correct: isCorrect,
-        })
-        .eq("id", question.id);
+        .update({ user_answer: answer.answer, is_correct: answer.is_correct })
+        .eq("id", answer.question_id);
 
-      // Fetch current concept mastery
-      const { data: concept } = await supabase
-        .from("concepts")
-        .select("id, title, mastery_score, times_tested, times_correct")
-        .eq("id", question.concept_id)
-        .single();
+      if (answer.is_correct) correct++;
 
-      if (concept) {
-        const oldLevel = getMasteryLevel(concept.mastery_score).level;
-        const newScore = updateMasteryScore(concept.mastery_score, isCorrect);
-        const newLevel = getMasteryLevel(newScore).level;
-
-        await supabase
+      // Update concept mastery
+      if (answer.concept_id) {
+        const { data: concept } = await supabase
           .from("concepts")
-          .update({
-            mastery_score: newScore,
-            times_tested: concept.times_tested + 1,
-            times_correct: concept.times_correct + (isCorrect ? 1 : 0),
-            last_tested_at: new Date().toISOString(),
-          })
-          .eq("id", concept.id);
+          .select("mastery_score, times_tested, times_correct")
+          .eq("id", answer.concept_id)
+          .single();
 
-        if (newLevel > oldLevel) {
-          levelUps.push({
-            concept_id: concept.id,
-            concept_title: concept.title,
-            old_level: oldLevel,
-            new_level: newLevel,
-          });
+        if (concept) {
+          const oldLevel = getMasteryLevel(concept.mastery_score).level;
+          const newMastery = updateMasteryScore(concept.mastery_score, answer.is_correct);
+          const newLevel = getMasteryLevel(newMastery).level;
+
+          await supabase
+            .from("concepts")
+            .update({
+              mastery_score: newMastery,
+              times_tested: concept.times_tested + 1,
+              times_correct: concept.times_correct + (answer.is_correct ? 1 : 0),
+              last_tested_at: new Date().toISOString(),
+            })
+            .eq("id", answer.concept_id);
+
+          if (newLevel > oldLevel) {
+            level_ups.push({
+              concept_id: answer.concept_id,
+              old_level: oldLevel,
+              new_level: newLevel,
+            });
+          }
         }
       }
     }
 
-    const score = questions.length > 0 ? correctCount / questions.length : 0;
+    const score = answers.length > 0 ? correct / answers.length : 0;
 
-    // Update session as completed
+    // Mark session complete
     await supabase
       .from("quiz_sessions")
       .update({
-        correct_answers: correctCount,
+        correct_answers: correct,
         score,
-        duration_seconds: durationSeconds,
+        duration_seconds: duration_seconds ?? null,
         completed_at: new Date().toISOString(),
       })
-      .eq("id", sessionId);
+      .eq("id", session_id)
+      .eq("user_id", user.id);
 
-    return NextResponse.json({
-      score,
-      correct: correctCount,
-      total: questions.length,
-      level_ups: levelUps,
-    });
+    // Update course mastery average
+    const { data: sessionRow } = await supabase
+      .from("quiz_sessions")
+      .select("course_id")
+      .eq("id", session_id)
+      .single();
+
+    if (sessionRow) {
+      const { data: allConcepts } = await supabase
+        .from("concepts")
+        .select("mastery_score")
+        .eq("course_id", sessionRow.course_id);
+
+      if (allConcepts && allConcepts.length > 0) {
+        const avg =
+          allConcepts.reduce((s, c) => s + c.mastery_score, 0) / allConcepts.length;
+        await supabase
+          .from("courses")
+          .update({ mastery_score: avg, updated_at: new Date().toISOString() })
+          .eq("id", sessionRow.course_id);
+      }
+    }
+
+    return NextResponse.json({ score, correct, total: answers.length, level_ups });
   } catch (err) {
-    console.error("Quiz submit error:", err);
-    return NextResponse.json(
-      { error: "Erreur interne du serveur" },
-      { status: 500 }
-    );
+    console.error("[quiz/submit] error:", err);
+    return NextResponse.json({ error: "Erreur lors de la soumission" }, { status: 500 });
   }
 }

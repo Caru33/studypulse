@@ -1,103 +1,59 @@
 import { NextRequest, NextResponse } from "next/server";
+import { stripe } from "@/lib/stripe";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import { stripe, IS_STRIPE_MOCK } from "@/lib/stripe";
 
-// IMPORTANT: Do NOT use request.json() here — Stripe requires the raw body for signature verification
-export async function POST(request: NextRequest) {
-  if (IS_STRIPE_MOCK || !stripe) {
-    return NextResponse.json({ received: true, mock: true });
+export async function POST(req: NextRequest) {
+  if (!stripe) {
+    return NextResponse.json({ error: "Stripe non configuré" }, { status: 503 });
   }
 
-  const sig = request.headers.get("stripe-signature");
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
-  if (!sig || !webhookSecret) {
-    return NextResponse.json(
-      { error: "Missing signature or webhook secret" },
-      { status: 400 }
-    );
-  }
+  const body = await req.text();
+  const signature = req.headers.get("stripe-signature") ?? "";
 
   let event;
   try {
-    const rawBody = Buffer.from(await request.arrayBuffer());
-    event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
-  } catch (err) {
-    console.error("Webhook signature verification failed:", err);
-    return NextResponse.json(
-      { error: "Webhook signature invalid" },
-      { status: 400 }
+    event = stripe.webhooks.constructEvent(
+      body,
+      signature,
+      process.env.STRIPE_WEBHOOK_SECRET ?? ""
     );
+  } catch (err) {
+    console.error("[webhook] signature verification failed:", err);
+    return NextResponse.json({ error: "Signature invalide" }, { status: 400 });
   }
 
   const supabase = createServiceRoleClient();
 
-  try {
-    switch (event.type) {
-      case "checkout.session.completed": {
-        const session = event.data.object as {
-          metadata?: { user_id?: string };
-          customer?: string;
-          subscription?: string;
-        };
-
-        const userId = session.metadata?.user_id;
-        if (!userId) break;
-
+  switch (event.type) {
+    case "checkout.session.completed": {
+      const session = event.data.object as {
+        customer: string;
+        subscription: string;
+        metadata?: { user_id?: string };
+      };
+      const userId = session.metadata?.user_id;
+      if (userId) {
         await supabase
           .from("profiles")
           .update({
+            stripe_customer_id: session.customer,
+            stripe_subscription_id: session.subscription,
             plan: "pro",
-            stripe_customer_id: session.customer as string,
-            stripe_subscription_id: session.subscription as string,
           })
           .eq("id", userId);
-
-        console.log(`User ${userId} upgraded to Pro`);
-        break;
       }
-
-      case "customer.subscription.deleted": {
-        const subscription = event.data.object as {
-          id: string;
-          customer: string;
-        };
-
-        await supabase
-          .from("profiles")
-          .update({ plan: "free", stripe_subscription_id: null })
-          .eq("stripe_subscription_id", subscription.id);
-
-        console.log(`Subscription ${subscription.id} cancelled — downgraded to free`);
-        break;
-      }
-
-      case "customer.subscription.updated": {
-        const subscription = event.data.object as {
-          id: string;
-          status: string;
-        };
-
-        if (subscription.status === "active") {
-          await supabase
-            .from("profiles")
-            .update({ plan: "pro" })
-            .eq("stripe_subscription_id", subscription.id);
-        } else if (
-          subscription.status === "canceled" ||
-          subscription.status === "unpaid"
-        ) {
-          await supabase
-            .from("profiles")
-            .update({ plan: "free" })
-            .eq("stripe_subscription_id", subscription.id);
-        }
-        break;
-      }
+      break;
     }
-  } catch (err) {
-    console.error("Webhook handler error:", err);
-    // Still return 200 to prevent Stripe from retrying
+    case "customer.subscription.deleted": {
+      const sub = event.data.object as { id: string };
+      await supabase
+        .from("profiles")
+        .update({ plan: "free", stripe_subscription_id: null })
+        .eq("stripe_subscription_id", sub.id);
+      break;
+    }
+    default:
+      break;
   }
 
   return NextResponse.json({ received: true });

@@ -2,57 +2,43 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { sm2, QUALITY_MAP, type DifficultyRating } from "@/lib/sm2";
 
-export async function POST(request: NextRequest) {
+const IS_MOCK =
+  !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  process.env.NEXT_PUBLIC_SUPABASE_URL.includes("your-project");
+
+export async function POST(req: NextRequest) {
   try {
+    const { flashcard_id, rating } = (await req.json()) as {
+      flashcard_id: string;
+      rating: DifficultyRating;
+    };
+
+    // Mock mode — no-op
+    if (IS_MOCK || flashcard_id?.startsWith("mock-")) {
+      return NextResponse.json({ success: true });
+    }
+
     const supabase = await createServerSupabaseClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
 
-    if (!user) {
-      return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
-    }
-
-    const body = await request.json();
-    const flashcardId: string = body.flashcard_id;
-    const rating: DifficultyRating = body.rating;
-
-    if (!flashcardId || !rating) {
-      return NextResponse.json(
-        { error: "flashcard_id et rating requis" },
-        { status: 400 }
-      );
-    }
-
-    if (!(rating in QUALITY_MAP)) {
-      return NextResponse.json({ error: "Rating invalide" }, { status: 400 });
-    }
-
-    // Fetch flashcard and verify ownership
-    const { data: flashcard } = await supabase
+    const { data: card } = await supabase
       .from("flashcards")
-      .select("*")
-      .eq("id", flashcardId)
+      .select("ease_factor, interval_days, repetitions")
+      .eq("id", flashcard_id)
       .eq("user_id", user.id)
       .single();
 
-    if (!flashcard) {
-      return NextResponse.json(
-        { error: "Flashcard introuvable" },
-        { status: 404 }
-      );
+    if (!card) {
+      return NextResponse.json({ error: "Flashcard introuvable" }, { status: 404 });
     }
 
-    // Apply SM-2 algorithm
-    const quality = QUALITY_MAP[rating];
-    const result = sm2(quality, {
-      ease_factor: flashcard.ease_factor,
-      interval_days: flashcard.interval_days,
-      repetitions: flashcard.repetitions,
-    });
+    const quality = QUALITY_MAP[rating] ?? 3;
+    const result = sm2(quality, card);
 
-    // Update flashcard
-    const { data: updated } = await supabase
+    await supabase
       .from("flashcards")
       .update({
         ease_factor: result.ease_factor,
@@ -61,16 +47,11 @@ export async function POST(request: NextRequest) {
         next_review_date: result.next_review_date,
         last_reviewed_at: new Date().toISOString(),
       })
-      .eq("id", flashcardId)
-      .select()
-      .single();
+      .eq("id", flashcard_id);
 
-    return NextResponse.json({ flashcard: updated });
+    return NextResponse.json({ success: true, next_review_date: result.next_review_date });
   } catch (err) {
-    console.error("Flashcard review error:", err);
-    return NextResponse.json(
-      { error: "Erreur interne du serveur" },
-      { status: 500 }
-    );
+    console.error("[flashcards/review] error:", err);
+    return NextResponse.json({ error: "Erreur lors de la mise à jour" }, { status: 500 });
   }
 }
