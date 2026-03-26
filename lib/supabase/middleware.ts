@@ -2,9 +2,13 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request });
+  const supabaseResponse = NextResponse.next({ request });
 
-  // Skip auth middleware when Supabase is not configured (mock/demo mode)
+  // AUTH REDIRECTS DISABLED FOR MVP DEMO — always pass through
+  // To re-enable auth enforcement, see the commented block below
+  return supabaseResponse;
+
+  // eslint-disable-next-line no-unreachable
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
     return supabaseResponse;
   }

@@ -30,7 +30,11 @@ export default function CoursesPage() {
       return;
     }
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) {
+      setCourses(MOCK_COURSES);
+      setLoading(false);
+      return;
+    }
     const { data } = await supabase
       .from("courses")
       .select("*")

@@ -42,7 +42,14 @@ export default function CoursePage() {
         return;
       }
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        // Demo mode: show first mock course
+        const found = MOCK_COURSES.find((c) => c.id === courseId) ?? MOCK_COURSES[0];
+        setCourse(found ?? null);
+        setConcepts(MOCK_CONCEPTS[found?.id ?? ""] ?? []);
+        setLoading(false);
+        return;
+      }
 
       const [courseRes, conceptsRes] = await Promise.all([
         supabase.from("courses").select("*").eq("id", courseId).eq("user_id", user.id).single(),

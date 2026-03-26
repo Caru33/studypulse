@@ -43,7 +43,11 @@ export default function FlashcardsPage() {
 
       const today = new Date().toISOString().split("T")[0];
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        setCards(MOCK_FLASHCARDS.slice(0, 3));
+        setLoading(false);
+        return;
+      }
 
       const { data } = await supabase
         .from("flashcards")

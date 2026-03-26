@@ -142,7 +142,15 @@ function DashboardContent() {
       }
 
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        // No auth in demo mode — fall back to mock data
+        setProfile(MOCK_PROFILE);
+        setCourses(MOCK_COURSES);
+        setStudyPlan(MOCK_STUDY_PLAN);
+        setStreak(3);
+        setLoading(false);
+        return;
+      }
 
       const [profileRes, coursesRes, planRes] = await Promise.all([
         supabase.from("profiles").select("*").eq("id", user.id).single(),

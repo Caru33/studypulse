@@ -54,7 +54,12 @@ export default function NewQuizPage() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        setCourses(MOCK_COURSES);
+        if (MOCK_COURSES.length > 0) setSelectedCourse(MOCK_COURSES[0].id);
+        setLoading(false);
+        return;
+      }
       const { data } = await supabase
         .from("courses")
         .select("*")
