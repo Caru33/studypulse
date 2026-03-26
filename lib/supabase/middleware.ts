@@ -30,34 +30,38 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  // Refresh the session — do NOT remove this call
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Refresh the session token — keep this call even in MVP mode
+  await supabase.auth.getUser();
 
-  // Redirect unauthenticated users away from protected routes
-  const isAuthRoute =
-    request.nextUrl.pathname.startsWith("/login") ||
-    request.nextUrl.pathname.startsWith("/signup");
-
-  const isProtectedRoute =
-    request.nextUrl.pathname.startsWith("/dashboard") ||
-    request.nextUrl.pathname.startsWith("/courses") ||
-    request.nextUrl.pathname.startsWith("/quiz") ||
-    request.nextUrl.pathname.startsWith("/flashcards") ||
-    request.nextUrl.pathname.startsWith("/settings");
-
-  if (!user && isProtectedRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    return NextResponse.redirect(url);
-  }
-
-  if (user && isAuthRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
-    return NextResponse.redirect(url);
-  }
+  // ─────────────────────────────────────────────────────────────────────────
+  // AUTH REDIRECTS — disabled for MVP demo
+  // To re-enable: uncomment the block below
+  // ─────────────────────────────────────────────────────────────────────────
+  //
+  // const { data: { user } } = await supabase.auth.getUser();
+  //
+  // const isAuthRoute =
+  //   request.nextUrl.pathname.startsWith("/login") ||
+  //   request.nextUrl.pathname.startsWith("/signup");
+  //
+  // const isProtectedRoute =
+  //   request.nextUrl.pathname.startsWith("/dashboard") ||
+  //   request.nextUrl.pathname.startsWith("/courses") ||
+  //   request.nextUrl.pathname.startsWith("/quiz") ||
+  //   request.nextUrl.pathname.startsWith("/flashcards") ||
+  //   request.nextUrl.pathname.startsWith("/settings");
+  //
+  // if (!user && isProtectedRoute) {
+  //   const url = request.nextUrl.clone();
+  //   url.pathname = "/login";
+  //   return NextResponse.redirect(url);
+  // }
+  //
+  // if (user && isAuthRoute) {
+  //   const url = request.nextUrl.clone();
+  //   url.pathname = "/dashboard";
+  //   return NextResponse.redirect(url);
+  // }
 
   return supabaseResponse;
 }
