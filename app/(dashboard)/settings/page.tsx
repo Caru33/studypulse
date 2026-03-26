@@ -34,7 +34,13 @@ export default function SettingsPage() {
         return;
       }
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        setProfile(MOCK_PROFILE);
+        setFullName(MOCK_PROFILE.full_name ?? "");
+        setUniversity(MOCK_PROFILE.university ?? "");
+        setProgram(MOCK_PROFILE.program ?? "");
+        return;
+      }
       const { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
       if (data) {
         setProfile(data);

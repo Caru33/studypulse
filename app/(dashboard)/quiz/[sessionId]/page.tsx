@@ -142,7 +142,7 @@ export default function QuizSessionPage() {
 
     return (
       <div className="max-w-md mx-auto py-8 text-center">
-        {showConfetti && <LevelUpConfetti />}
+        {showConfetti && <LevelUpConfetti events={[]} />}
 
         <div
           className="w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6"

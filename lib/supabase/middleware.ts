@@ -1,71 +1,10 @@
-import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-export async function updateSession(request: NextRequest) {
-  const supabaseResponse = NextResponse.next({ request });
-
-  // AUTH REDIRECTS DISABLED FOR MVP DEMO — always pass through
-  // To re-enable auth enforcement, see the commented block below
-  return supabaseResponse;
-
-  // eslint-disable-next-line no-unreachable
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-    return supabaseResponse;
-  }
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          );
-          supabaseResponse = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          );
-        },
-      },
-    }
-  );
-
-  // Refresh the session token — keep this call even in MVP mode
-  await supabase.auth.getUser();
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // AUTH REDIRECTS — disabled for MVP demo
-  // To re-enable: uncomment the block below
-  // ─────────────────────────────────────────────────────────────────────────
-  //
-  // const { data: { user } } = await supabase.auth.getUser();
-  //
-  // const isAuthRoute =
-  //   request.nextUrl.pathname.startsWith("/login") ||
-  //   request.nextUrl.pathname.startsWith("/signup");
-  //
-  // const isProtectedRoute =
-  //   request.nextUrl.pathname.startsWith("/dashboard") ||
-  //   request.nextUrl.pathname.startsWith("/courses") ||
-  //   request.nextUrl.pathname.startsWith("/quiz") ||
-  //   request.nextUrl.pathname.startsWith("/flashcards") ||
-  //   request.nextUrl.pathname.startsWith("/settings");
-  //
-  // if (!user && isProtectedRoute) {
-  //   const url = request.nextUrl.clone();
-  //   url.pathname = "/login";
-  //   return NextResponse.redirect(url);
-  // }
-  //
-  // if (user && isAuthRoute) {
-  //   const url = request.nextUrl.clone();
-  //   url.pathname = "/dashboard";
-  //   return NextResponse.redirect(url);
-  // }
-
-  return supabaseResponse;
+/**
+ * Auth middleware — disabled for MVP demo.
+ * To re-enable Supabase auth enforcement, replace this with the full
+ * @supabase/ssr session refresh + redirect logic.
+ */
+export function updateSession(_request: NextRequest) {
+  return NextResponse.next();
 }
